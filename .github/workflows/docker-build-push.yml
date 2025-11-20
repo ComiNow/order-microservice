@@ -58,3 +58,25 @@ jobs:
           echo "Image successfully pushed!"
           echo "Image URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
           echo "Latest URI: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+
+      - name: Checkout infra repository
+        uses: actions/checkout@v4
+        with:
+          repository: ComiNow/infra
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra
+
+      - name: Update Kubernetes deployment with new image tag
+        run: |
+          cd infra
+          sed -i "s|image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:.*|image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}|g" k8s/order-deployment.yaml
+          cat k8s/order-deployment.yaml | grep "image:"
+
+      - name: Commit and push changes to infra repository
+        run: |
+          cd infra
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add k8s/order-deployment.yaml
+          git commit -m "Update order-microservice image to ${{ github.sha }}" || echo "No changes to commit"
+          git push origin main
